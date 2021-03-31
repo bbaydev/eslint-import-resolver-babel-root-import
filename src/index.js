@@ -1,39 +1,47 @@
-const path = require('path');
-const fs = require('fs');
-const JSON5 = require('json5');
-const nodeResolve = require('eslint-import-resolver-node').resolve;
+const path = require("path");
+const fs = require("fs");
+const JSON5 = require("json5");
+const nodeResolve = require("eslint-import-resolver-node").resolve;
 const {
     hasRootPathPrefixInString,
-    transformRelativeToRootPath
-} = require('babel-plugin-root-import/build/helper.js');
+    transformRelativeToRootPath,
+} = require("babel-plugin-root-import/build/helper.js");
 
 function isString(value) {
-    return typeof value === 'string';
+    return typeof value === "string";
 }
 
 function isObject(value) {
-    return value !== null && typeof value === 'object';
+    return value !== null && typeof value === "object";
 }
 
 // returns the root import config as an object. Or an array
-function getConfigFromBabel(directory, babelrcName = '.babelrc') {
+function getConfigFromBabel(directory, babelrcName = ".babelrc") {
     const babelrcPath = babelrcName && path.join(directory, babelrcName);
-    let babelConfig = babelrcPath && fs.existsSync(babelrcPath)
-        ? JSON5.parse(fs.readFileSync(babelrcPath, 'utf8'))
-        : null;
+    let babelConfig =
+        babelrcPath && fs.existsSync(babelrcPath)
+            ? JSON5.parse(fs.readFileSync(babelrcPath, "utf8"))
+            : null;
 
     // look for "babel" hash within package.json if didn't find .babelrc file
-    const packageJSONPath = path.join(directory, 'package.json');
+    const packageJSONPath = path.join(directory, "package.json");
     if (!babelConfig && fs.existsSync(packageJSONPath)) {
-        const packageJSON = JSON.parse(fs.readFileSync(packageJSONPath, 'utf8'));
+        const packageJSON = JSON.parse(
+            fs.readFileSync(packageJSONPath, "utf8")
+        );
         babelConfig = packageJSON.babel || babelConfig;
     }
 
-    if (babelConfig !== null && typeof babelConfig === 'object') {
-        const plugins = Array.isArray(babelConfig.plugins) ? babelConfig.plugins : [];
-        const babelPluginEntry = plugins.find(entry => {
+    if (babelConfig !== null && typeof babelConfig === "object") {
+        const plugins = Array.isArray(babelConfig.plugins)
+            ? babelConfig.plugins
+            : [];
+        const babelPluginEntry = plugins.find((entry) => {
             const pluginName = isString(entry) ? entry : entry[0];
-            return pluginName === 'babel-plugin-root-import' || pluginName === 'root-import';
+            return (
+                pluginName === "babel-plugin-root-import" ||
+                pluginName === "root-import"
+            );
         });
 
         if (!babelPluginEntry) {
@@ -50,7 +58,7 @@ function getConfigFromBabel(directory, babelrcName = '.babelrc') {
     }
 
     /* istanbul ignore next: can't control presence of config file at root directory */
-    if (directory === '/' || directory.substr(1) === ':\\') return [];
+    if (directory === "/" || directory.substr(1) === ":\\") return [];
     return getConfigFromBabel(path.dirname(directory));
 }
 
@@ -66,15 +74,17 @@ exports.interfaceVersion = 2;
  * @param  {string} [babelrc] - the name of the babelrc file
  * @return {object}
  */
-exports.resolve = (source, file, config = {}, babelrc = '.babelrc') => {
+exports.resolve = (source, file, config = {}, babelrc = ".babelrc") => {
     // Consider any array or an object w/ rootPathPrefix or rootPathSuffix key a valid alias configuration
-    const isValidConfiguration = Array.isArray(config) ||
-        isObject(config) && (
-            config.hasOwnProperty('rootPathPrefix') ||
-            config.hasOwnProperty('rootPathSuffix')
-        );
+    const isValidConfiguration =
+        Array.isArray(config) ||
+        (isObject(config) &&
+            (config.hasOwnProperty("rootPathPrefix") ||
+                config.hasOwnProperty("rootPathSuffix")));
 
-    const options = isValidConfiguration ? config : getConfigFromBabel(process.cwd(), babelrc);
+    const options = isValidConfiguration
+        ? config
+        : getConfigFromBabel(process.cwd(), babelrc);
     const optsArray = [].concat(options || []);
 
     // If parsed config from babel and plugin wasn't listed there
@@ -86,18 +96,33 @@ exports.resolve = (source, file, config = {}, babelrc = '.babelrc') => {
     if (optsArray.length === 0) optsArray.push({});
 
     const rootPathConfig = optsArray.map((item = {}) => ({
-        rootPathPrefix: isString(item.rootPathPrefix) ? item.rootPathPrefix : '~',
-        rootPathSuffix: isString(item.rootPathSuffix) ? item.rootPathSuffix.replace(/^(\/)|(\/)$/g, '') : ''
+        rootPathPrefix: isString(item.rootPathPrefix)
+            ? item.rootPathPrefix
+            : "~",
+        rootPathSuffix: isString(item.rootPathSuffix)
+            ? item.rootPathSuffix.replace(/^(\/)|(\/)$/g, "")
+            : "",
+        ...item,
     }));
 
     let transformedSource = source;
+    let resolverConfig = {};
     for (let i = 0; i < rootPathConfig.length; i += 1) {
-        const option = rootPathConfig[i];
-        const prefix = option.rootPathPrefix;
-        const suffix = option.rootPathSuffix;
+        // The remaining configs will be sent to node.resolver to deal with special cases.
+        // eg. Adding .jsx to the extension list.
+        const {
+            rootPathPrefix: prefix,
+            rootPathSuffix: suffix,
+            ...option
+        } = rootPathConfig[i];
+        resolverConfig = option;
 
         if (hasRootPathPrefixInString(source, prefix)) {
-            transformedSource = transformRelativeToRootPath(source, suffix, prefix);
+            transformedSource = transformRelativeToRootPath(
+                source,
+                suffix,
+                prefix
+            );
             // Since babel-plugin-root-import 5.0.0 relative path is now actually relative to the root.
             // Node resolver expects that path would be relative to file, so we have to resolve it first
             transformedSource = path.resolve(transformedSource);
@@ -105,6 +130,5 @@ exports.resolve = (source, file, config = {}, babelrc = '.babelrc') => {
         }
     }
 
-    return nodeResolve(transformedSource, file, {});
+    return nodeResolve(transformedSource, file, resolverConfig);
 };
-
