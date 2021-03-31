@@ -1,5 +1,5 @@
 {
-  "name": "eslint-import-resolver-babel-plugin-root-import",
+  "name": "@beautybay/eslint-import-resolver-babel-plugin-root-import",
   "version": "1.1.2",
   "main": "src/index.js",
   "description": "fork of eslint-import-resolver-babel-root-import that works",
